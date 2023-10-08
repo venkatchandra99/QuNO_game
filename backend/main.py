@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, APIRouter
+from fastapi import FastAPI, HTTPException, APIRouter, Request
 from players import Player
 from code_game import Game
 
@@ -21,8 +21,8 @@ def get_game(game_id:int)-> Game:
     except IndexError as e:
         raise HTTPException(status_code=404, detail="Game instance not found")
 
-@app.post("/add_player/{_json}", status_code= 201)
-async def create_game(_json:dict)-> dict:
+@app.post("/create_game/", status_code= 201)
+async def create_game(_json:dict[str, str|list[str|int]|int])-> dict[str, int|dict|str|list]:
 # def create_game(_json:dict)-> dict:
     response = {}
 
@@ -65,16 +65,22 @@ async def create_game(_json:dict)-> dict:
         details[player.name.split("_")[0]]['cards'] = player.cards
         details[player.name.split("_")[0]]['target_state'] = [str(i) for i in player.target_state]
         details[player.name.split("_")[0]]['fidelities'] = game.fidelity(player.target_state, game.game_state).real
+        details[player.name.split("_")[0]]['bloch_sphere'] = send_bloch_sphere({"game_id": player.game_id,
+                                                       "statevector": player.target_state,
+                                                       "player": player.name.split("_")[0]})
+        details[player.name.split("_")[0]]['q_sphere'] = send_q_sphere({"game_id": player.game_id,
+                                                       "statevector": player.target_state,
+                                                       "player": player.name.split("_")[0]})
 
     response['data'] = details
-    return response
+    return response 
 
 
-@app.post("/play_card/{_json}", status_code= 201)
-def play_card(_json)->dict:
+@app.post("/play_card/", status_code= 201)
+def play_card(_json:dict[str, None|int|float|str|list[str|int|None|float]])->dict[str, int|dict|str|float|list]:
     _response = {}
 
-    print(_json)
+    # print(_json)
 
     game_id = _json['game_id']
     player = _json['player']+'_'+str(game_id)
@@ -103,12 +109,12 @@ def play_card(_json)->dict:
                                         "remaining_cards": len(game.remaining_cards),
                                         "fidelities" : fidelities}
 
-    print(game.gate_sequence)
-    print(len(game.gate_sequence))
+    # print(game.gate_sequence)
+    # print(len(game.gate_sequence))
     return _response
 
-@app.post("/show/{_json}", status_code= 201)
-def show(_json:dict)-> dict:
+@app.post("/show/", status_code= 201)
+def show(_json:dict[str, int|str])-> dict[str, str]:
     
     game_id = _json['game_id']
     player = _json['player']+"_"+str(game_id)
@@ -126,8 +132,8 @@ def show(_json:dict)-> dict:
         _response["end"] = "true"
     return _response
 
-@app.post("/drop/{_json}", status_code= 201)    
-def drop(_json:dict)-> dict:
+@app.post("/drop/", status_code= 201)    
+def drop(_json:dict[str, int|str])-> dict[str, str]:
     game_id = _json['game_id']
     player = _json['player']+"_"+str(game_id)
 
@@ -138,10 +144,10 @@ def drop(_json:dict)-> dict:
     if len([_ for _ in game.get_top_players()]) == 1:
         game.end_game()
         _response["end"] = "true"
-    _response
+    return _response
 
-@app.post("/game_circuit/{_json}", status_code= 201)
-def send_game_circuit(_json:dict)-> dict:
+@app.post("/game_circuit/", status_code= 201)
+def send_game_circuit(_json:dict[str, int|str|float|dict[str, list[str|list[int]|int|float|None]]])-> dict[str, int|str]:
     
     game_id = _json['game_id']
     gates = []
@@ -163,12 +169,13 @@ def send_game_circuit(_json:dict)-> dict:
     path = "circuit_"+str(game_id)+".png"
     game.save_circuit_image(gates=gates, qubits=qubits, angles=angles, path= path)
     
+    print(type(game.image_to_base64(file_path= path)))
     _response =  {"circuit": game.image_to_base64(file_path= path)}
     os.remove(path= path)
     return _response
 
-@app.post("/bloch_sphere/{_json}", status_code= 201)    
-def send_bloch_sphere(_json:dict)-> dict:
+# @app.post("/bloch_sphere/", status_code= 201)    
+def send_bloch_sphere(_json:dict[str, int|str])-> dict[str, str]:
     game_id = _json['game_id']
     statevetor = _json['statevector']
     player  = _json['player']
@@ -185,8 +192,8 @@ def send_bloch_sphere(_json:dict)-> dict:
     os.remove(path= path)
     return _response
 
-@app.post("/q_sphere/{_json}", status_code= 201)
-def send_q_sphere(_json:dict)-> dict:
+# @app.post("/q_sphere/", status_code= 201)
+def send_q_sphere(_json:dict[str, int|str])-> dict[str, str]:
     game_id = _json['game_id']
     statevetor = _json['statevector']
     player  = _json['player']
@@ -203,8 +210,8 @@ def send_q_sphere(_json:dict)-> dict:
     os.remove(path= path)
     return _response
 
-@app.post("/add_deck/{_json}", status_code= 201)
-def add_deck(_json:dict)-> dict:
+@app.post("/add_deck/", status_code= 201)
+def add_deck(_json:dict[str, int|str])-> dict[str, str|int]:
 
     game_id = _json['game_id']
     game = get_game(game_id= game_id)
@@ -216,9 +223,9 @@ def add_deck(_json:dict)-> dict:
 # print("--------------------------------------------------------------------------------------")
 # print("----------------Create game Response------------------------")
 # create_game_json_file = {
-#     "players": ["Venkat", "Chandra", "Suresh"],
-#     "initial_state": [1,0,0,0],
-#     "decks": 3
+    # "players": ["Venkat", "Chandra", "Suresh"],
+    # "initial_state": [1,0,0,0],
+    # "decks": 3
 # }
 
 # rep = create_game(create_game_json_file)
