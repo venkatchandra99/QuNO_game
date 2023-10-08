@@ -73,14 +73,15 @@ class Operations():
         image = circuit_drawer(qc, output='mpl')
         image.savefig(path, format='png')
 
-    def save_bloch_sphere(state_vector:list, path:str = "bloch_sphere.png", reverse:bool= False):
+    def save_bloch_sphere(self, state_vector:list, path:str = "bloch_sphere.png", reverse:bool= False):
         if reverse:
             state_vector = state_vector[::-1]
+        # print(state_vector)
         bloch_fig = plot_bloch_multivector(state_vector)
         bloch_fig.savefig(path)
         plt.close(bloch_fig)
     
-    def save_q_sphere(state_vector:list, path:str = "q_sphere.png", reverse:bool= False):
+    def save_q_sphere(self, state_vector:list, path:str = "q_sphere.png", reverse:bool= False):
         if reverse:
             state_vector = state_vector[::-1]
         qsphere_fig = plot_state_qsphere(state_vector)    
@@ -168,7 +169,7 @@ class Operations():
         Returns:
             bool
         """
-        print("statevector valid", statevector)
+        # print("statevector valid", statevector)
         # Check if the length is a power of 2
         num_qubits = int(cmath.log(len(statevector), 2).real)
         if not 2**num_qubits == len(statevector):
@@ -193,7 +194,7 @@ class Operations():
         """        
         # if len(state1) != len(state2):
         #     raise ValueError("States have different number of qubits.")
-        
+        # print("States:", state1, state2)
         inner_product = sum(a1 * a2.conjugate() for a1, a2 in zip(state1, state2))
         norm1 = cmath.sqrt(sum(abs(a)**2 for a in state1))
         norm2 = cmath.sqrt(sum(abs(a)**2 for a in state2))
@@ -429,10 +430,10 @@ class Operations():
         reduced_statevector = []
         for state_index in range(len(statevector)):
             binary = self.int_to_binary(state_index, int(cmath.log(len(statevector), 2).real))
-            print(binary)
+            # print(binary)
             if int(binary[qubit]) == measurment_value:
                 reduced_statevector.append(statevector[state_index])
-        print("reduced2:",reduced_statevector)
+        # print("reduced2:",reduced_statevector)
         normalized_statevector = self.normalize_statevector(reduced_statevector)
         return normalized_statevector
 

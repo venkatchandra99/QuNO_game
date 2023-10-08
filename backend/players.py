@@ -63,3 +63,6 @@ class Player:
     
     def add_card(self, card:str):
         self.__cards.append(card)
+
+    def empty_cards(self):
+        self.__cards = []

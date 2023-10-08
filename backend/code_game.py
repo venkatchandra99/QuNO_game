@@ -27,6 +27,7 @@ class Game(Operations):
             self.players = None
             self.ejected_players = []
             self.winning_players = []
+            self.game_started = False
             self.cards = [i.name for i in list(QuantumGates)]
             for i in ['Rx', 'Ry', 'Rz']:
                 self.cards.append(i)
@@ -42,11 +43,13 @@ class Game(Operations):
     def get_all_games(g):
         return g.all_games
 
-    def set_target_states(self, players:list, total_qubits = None):
+    def set_target_states(self, players:list|None= None, total_qubits:int = None):
+        if not self.game_started:
+            raise Exception("Distribure cards for players")
+        if players is None:
+            players = self.get_players()
         if not isinstance(players[0], Player):
             players = self.player_ids_to_object(players= players)
-        for player in players:
-            player.game_id = self.game_id
         target_state = self.initial_state.copy()
         target_state = self.row_to_coloumn_vector(target_state)
         if total_qubits is None:
@@ -123,16 +126,39 @@ class Game(Operations):
                     return i.value
 
     def distribute_cards(self, players:list|None = None, decks:int|None=None, num_cards:int= 7):
-        if players is None:
-            players = self.get_players()
+        if self.game_started:
+            raise Exception("Game: "+str(self.game_id)+" already started. Check for other games.")
+        self.game_started = True
+        player_flag = players.copy()
+        if players is not None:
+            if len(players)!=0 and (not isinstance(players[0], Player)):
+                players = self.player_ids_to_object(players= players)
+
+            for _ in player_flag:
+                if _ not in [i.name for i in players]:
+                    raise Exception(_ + " is not a player.")
+
+            for player in players:
+                if player.game_id is None: 
+                    player.game_id = self.game_id
+                elif player.game_id != self.game_id:
+                    raise Exception(player.name+" doesn't belong to this game.")
+
+        for i in self.get_players():
+            if i not in players:
+                players.append(i)
+
+        if len(players) == 0 or (players is None):
+            raise Exception("No players found")
         
-        if len(players)!=0 and (not isinstance(players[0], Player)):
-            players = self.player_ids_to_object(players= players)
+        
         if (decks is None) and (self.num_decks is not None):
             decks = self.num_decks
+
         cards = [i.name for i in list(QuantumGates)]
         for i in ['Rx', 'Ry', 'Rz', 'add_card', 'remove_card']:
             cards.append(i)
+        self.players = players.copy()
         if decks is None:
             for i in range(num_cards):
                 for player in players:
@@ -140,14 +166,13 @@ class Game(Operations):
         else:
             if num_cards*len(players) >= len(cards)*decks:
                 raise Exception("Insufficient number of cards to distribute/play")
-            cards = cards * decks
+            self.remaining_cards = self.total_cards() * decks
             for i in range(num_cards):
                 for player in players:
-                    random_card = random.choice(cards)
+                    random_card = random.choice(self.remaining_cards)
                     player.add_card(random_card)
-                    cards.remove(random_card)
-            for _card in cards:
-                self.remaining_cards.append(_card)
+                    self.remaining_cards.remove(random_card)
+            # print("After distribution:", len(self.remaining_cards))
 
     def check_top_fedility(self, player):
         if not isinstance(player, Player):
@@ -204,7 +229,8 @@ class Game(Operations):
             _.append(i)
         return _.copy()
 
-    def player_ids_to_object(self, players:list|str|int)-> list|Player:
+    def player_ids_to_object(self, players:list|str|int, game_id:int|None= None)-> list|Player:
+        if game_id == None: game_id = self.game_id
         if isinstance(players, list):
             players_obj = []
             for _player in players:
@@ -228,6 +254,7 @@ class Game(Operations):
         return fedilities
     
     def drop_card(self, players:list, player:Player|str, card:str, qubits:list= [], angle:float = None, game_id:int|None =None)-> (int|None, list, str, dict):
+        self.players = self.get_players(game_id= self.game_id)
         if game_id is None:
             game_id = self.game_id
         if not self.is_player_of_game(player= player, game_id= game_id):
@@ -243,7 +270,7 @@ class Game(Operations):
         try:
             player.cards.remove(card)
         except ValueError as e:
-            raise Exception("Card not in " + player.name +"'s cards")
+            raise Exception("Card not in Player's cards")
         if card == "add_card":
             self.game_state = QuantumGates.add_qubit(statevector= self.game_state)
         elif card == "remove_card":
@@ -268,6 +295,7 @@ class Game(Operations):
         player.add_card(new_card)
 
         fidelities = self.players_fedilites(players=players)
+        # print("After dfropping:", len(self.remaining_cards))
 
         return measurement, self.game_state, new_card, fidelities
         
@@ -291,10 +319,11 @@ class Game(Operations):
 
     def add_deck(self):
         """Adds one deck of cards to the game.
-        """        
-        self.num_decks = self.num_decks+1
-        for i in self.total_cards():
-            self.remaining_cards.append(i)
+        """
+        if self.num_decks is not None:  
+            self.num_decks = self.num_decks+1
+            for i in self.total_cards():
+                self.remaining_cards.append(i)
 
     def winners_list(self)->list:
         """ Returns list of all players in winning order.
@@ -315,7 +344,7 @@ class Game(Operations):
     def won_players(self)-> list:
         return self.winning_players
     
-    def ejected_players(self)-> list:
+    def lost_players(self)-> list:
         return self.ejected_players
     
     def get_game_sequence(self)-> (list, list, list):
@@ -325,127 +354,35 @@ class Game(Operations):
         player = self.player_ids_to_object(players= player)
         if self.check_top_fedility(player):
             self.winning_players.append(player)
-            return True
+            b = True
         else:
             self.ejected_players.insert(0, player)
-            return False
+            b = False
+        player.target_state = None 
+        player.empty_cards()
+        player.game_id = None
+        return b
 
     def drop(self, player:str):
         player = self.player_ids_to_object(players= player)
         self.ejected_players.append(player)
+        player.target_state = None 
+        player.empty_cards()
+        player.game_id = None
 
-
-        
-    def play(self, players:list):
-
-        self.players = players.copy()
-        # for i in self.end_game():
-        #     print(i)
-        # quit()
-        
-        self.set_target_states(players= players)
-        print("gate_sequence: ")
-        for i in self.gate_sequence:
-            print(i, end=" ")
-        print()
-        
-        print("random_angles:")
-        for i in self.random_angles:
-            print(i, end=" ")
-        print()
-
-        # Check whether every player is assigned a target state.
-        print("Check whether every player is assigned a target state")
+    def end_game(self):
+        players = self.get_top_players()
         for player in players:
-            if player.target_state is None:
-                raise Exception(player.name+" is not assigned a target state")
+            self.winning_players.append(player)
+            player.target_state = None 
+            player.empty_cards()
+            player.game_id = None
 
 
-
-        # Distribute the cards.
-        print("Distribute the cards.")
-        self.distribute_cards(players= players, num_cards= 7)
-
-        # Starting the game
-        print("Starting the game")
-        while True:
-            for player in players:
-                playing_card = input("Enter your card: ")
-                self.drop_cards(player, playing_card= playing_card)
-            
-                        
-
-# p1 = Player("Venkat")
-# p2 = Player("Chandra")
-
-
-
-# Player("B")
-# Player("C")
-
-# for p in Player.get_all_players():
-#     print("name ",p.name)
-
-# print(Player.get_players_count())
-
-# # g = Game(initial_state= [1, 0, 0, 0], decks = 2)
-
-# for p in g.player_ids_to_object(players=[]):
-#     print(p)
-
-# ##g = Game(initial_state= [1, 0, 0, 0])
-# g.set_target_states([p1, p2])
-# g.play([p1, p2])
-
-# print()
-# print(p1)
-# print(p2)
-
-# print(p1.cards)
-
-
-# g.play([p1, p2])
-# print(p1.cards)
-# print(p2.cards)
-# print(g.remaining_cards)
-
-# print()
-# print(g.cards)
-
-
+        
 gates = ['X', 'Z', 'Rx', 'CX', 'Ry','Reset']
 qubits  =[[1], [0], [2], [0,1], [2], [1]]
 angles = [None, None, cmath.pi, None, cmath.pi/4, None]
 
-# g.save_circuit_image(gates=gates, qubits=qubits, angles=angles)
-
-print()
-# for i in [p1, p2]:
-#     print(i.name, g.is_valid_statevector(i.target_state))
-# print("fedility", g.fidelity(p1.target_state, p2.target_state))
-# print()
-# print("sequence_num", g.target_sequence_num)
-
-
-# print("gates: ", end="")
-# for i in g.gate_sequence:
-#     print(i.name, end=", ")
-# print()
-# print()
-
-# print(g.multiply_gates(QuantumGates.X.value, [[1], [0]]))
-
-# for i in g.get_total_unitary(QuantumGates.CNOT.value, total_qubits=3, qubit_num=[0, 2]):
-#     print(i)
-
-# print()
-
-# print(str([i for i in range(8)]).replace("[", " ").replace("]", ""))
-# for i, j in enumerate(g.apply_two_qubit_gate(QuantumGates.CNOT.value, qubits=[1,0], total_qubits=3)):
-#     print(j, i)
-##for i in g.tensor_product(QuantumGates.CNOT.value, QuantumGates.Rx(0)):
-##    print(i)
-##
-##plot_bloch_multivector(g.tensor_product([0, 1], [1, 0]))
-##plt.show()
+Game().save_circuit_image(gates=gates, qubits=qubits, angles=angles)
 

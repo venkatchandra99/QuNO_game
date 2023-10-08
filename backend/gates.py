@@ -44,9 +44,9 @@ class QuantumGates(Enum):
                 binary_1 = binary_1 + abs(amplitude**2)
             elif binary[qubit] == '1' and isinstance(amplitude, complex):
                 binary_1 = binary_1 + abs((amplitude**2).real)
-            print("measures:", binary_0, binary_1)
+            # print("measures:", binary_0, binary_1)
         measurement = random.choices([0, 1], [binary_0, binary_1])[0]
         reduced_statevector = Operations().reduce_statevector(statevector= statevector, qubit= qubit, measurment_value= measurement)
-        print("reduced:",reduced_statevector)
+        # print("reduced:",reduced_statevector)
         return measurement, reduced_statevector
     
