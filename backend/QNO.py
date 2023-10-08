@@ -64,7 +64,7 @@ async def get_cards(player_name:str)-> dict:
 @app.get("/{name}/details", status_code=201)
 async def get_player(name:str)-> dict:
     details = {}
-    print(Player.get_all_players())
+    # print(Player.get_all_players())
     for player in Player.get_all_players():
         if player.name == name:
             details['name'] = name
@@ -76,7 +76,7 @@ async def get_player(name:str)-> dict:
 
 @app.post("/create_game", status_code=201)
 async def create_game(initial_state:list[int|float|ComplexNumber] = [1,0,0,0], decks:int|None= None)-> dict:
-    print(type(initial_state))
+    # print(type(initial_state))
     for i in range(len(initial_state)):
         if isinstance(initial_state[i], ComplexNumber):
             initial_state[i] = complex(initial_state[i].real, initial_state[i].imag)
@@ -96,9 +96,9 @@ async def get_game_state(game_id:int)-> dict:
     return {"game_state":str(get_game(game_id).game_state)}
 
 @app.put("/set_target_states", status_code=204)
-async def set_targets(game_id:int, players:list[str])-> None:
+async def set_targets(game_id:int)-> None:
     game = get_game(game_id= game_id)
-    game.set_target_states(players)
+    game.set_target_states()
     
 @app.get("/num_decks", status_code=201)
 async def get_num_decks(game_id:int)-> dict:
@@ -132,32 +132,70 @@ async def play_card(game_id:int, player:str, card:str, qubits:list[int], angle:f
         "fidelities" : fidelities
     }
 
-@app.post("/{player}/show", status_code=204)
-async def show(player:str, game_id:int):
-    game = get_game(game_id)
-    game.show(player= player)
-    player.target_state = None
-    player.cards = []
+@app.post("/{player}/{game_id}/show", status_code=201)
+async def show(player:str, game_id:int)-> dict:
+    game = get_game(game_id)        
+    b = game.show(player= player)
+    player = game.player_ids_to_object(players=player)
+    player.target_state = None 
+    player.empty_cards()
     player.game_id = None
-
-@app.post("/{player}/drop", status_code=204)
-async def drop(player:str, game_id:int):
+    if b:
+        return {"status": player.name+" won the Game: "+str(game_id)}
+    else:
+        return {"status": player.name+" ejected from the Game: "+str(game_id)}
+        
+@app.post("/{player}/drop", status_code=201)
+async def drop(player:str, game_id:int)-> dict:
     game = get_game(game_id)
     game.drop(player= player)
-    player.target_state = None
-    player.cards = []
-    player.game_id = None
+    players = []
+    players.append(player)
+    if len([_.name for _ in game.get_top_players()]) == 1:
+        game.show(player= game.get_top_players()[0].name)
+        players.append()
+        game_completed = True
+    elif len([_.name for _ in game.get_top_players()]) == 0:
+        game_completed = True
+    else:
+        game_completed = False
+    for _ in players:
+        _ = game.player_ids_to_object(players= _)
+        _.target_state = None
+        _.empty_cards()
+        _.game_id = None
+    return {"status": player.name+" ejected from the Game: "+str(game_id),
+            "t": game_completed}
+
+@app.post("/game/{game_id}", status_code=201)
+async def game_details(game_id:int)-> dict:
+    details = {}
+    game = get_game(game_id)
+    details["game_id"] = game_id
+    details["players"] = [_.name for _ in game.get_players()]
+    details["won_players"] = [_.name for _ in game.won_players()]
+    details["ejected_players"] = [_.name for _ in game.lost_players()]
+    details["current players"] = [_.name for _ in game.get_top_players()]
+    return details
 
 
 
 
-# Player("Venkat")
-# Player("Chandra")
+
+
+
+Player("Venkat")
+Player("Chandra")
 # Player("Daniel")
 
-# g = Game(decks=3)
-# g.set_target_states(players= ["Venkat", "Chandra", "Daniel"])
-# g.distribute_cards()
+g = Game(decks=2)
+g.distribute_cards(players= ["Venkat", "Chandra"])
+g.set_target_states()
+
+for i in g.get_players():
+    print(i.name)
+
+
 
 
 
